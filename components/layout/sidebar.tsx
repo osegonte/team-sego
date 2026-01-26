@@ -12,81 +12,70 @@ interface SidebarProps {
 export function Sidebar({ workspaces, currentWorkspaceId }: SidebarProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
+  // Find current workspace or default to first one
+  const currentWorkspace = workspaces.find(w => w.workspaces.id === currentWorkspaceId) || workspaces[0]
+  const currentWorkspaceName = currentWorkspace?.workspaces.name || 'Team Sego'
+
+  // Filter out current workspace from the list
+  const otherWorkspaces = workspaces.filter(w => w.workspaces.id !== currentWorkspace?.workspaces.id)
+
   return (
     <>
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        {/* Sidebar Header */}
-        <div className="h-14 flex items-center px-4 border-b border-gray-200">
-          <h1 className="text-lg font-semibold text-gray-900">Team Sego</h1>
+      <aside className="w-64 bg-sidebar-bg border-r border-sidebar-border flex flex-col">
+        {/* Sidebar Header - Current Workspace + Plus Button */}
+        <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border">
+          <h1 className="text-lg font-semibold text-text-primary truncate">
+            {currentWorkspaceName}
+          </h1>
+          
+          {/* Create Workspace Button */}
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-sidebar-hover transition flex-shrink-0"
+            title="Create workspace"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
         </div>
 
-        {/* Workspaces Section */}
+        {/* Workspaces List */}
         <div className="flex-1 overflow-y-auto py-4">
-          <div className="px-3 mb-2">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Workspaces
-              </h2>
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="text-gray-400 hover:text-gray-600 transition"
-                title="Create workspace"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
-            </div>
-          </div>
+          {otherWorkspaces.length > 0 && (
+            <>
+              <div className="px-3 mb-2">
+                <h2 className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
+                  Workspaces
+                </h2>
+              </div>
 
-          {/* Workspace List */}
-          <nav className="space-y-1 px-2">
-            {workspaces.map((workspace) => {
-              const isActive = workspace.workspaces.id === currentWorkspaceId
-              
-              return (
-                <Link
-                  key={workspace.workspaces.id}
-                  href={`/workspace/${workspace.workspaces.id}`}
-                  className={`
-                    flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition
-                    ${isActive 
-                      ? 'bg-blue-50 text-blue-700' 
-                      : 'text-gray-700 hover:bg-gray-100'
-                    }
-                  `}
-                >
-                  {/* Workspace Icon */}
-                  <div className={`
-                    w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold
-                    ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}
-                  `}>
-                    {workspace.workspaces.name.substring(0, 2).toUpperCase()}
-                  </div>
-                  
-                  {/* Workspace Name & Type */}
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate">{workspace.workspaces.name}</div>
-                    <div className={`text-xs ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>
-                      {workspace.workspaces.workspace_type}
+              <nav className="space-y-1 px-2">
+                {otherWorkspaces.map((workspace) => (
+                  <Link
+                    key={workspace.workspaces.id}
+                    href={`/workspace/${workspace.workspaces.id}`}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-text-primary hover:bg-sidebar-hover transition"
+                  >
+                    {/* Workspace Icon */}
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold bg-gray-100 text-text-secondary">
+                      {workspace.workspaces.name.substring(0, 2).toUpperCase()}
                     </div>
-                  </div>
+                    
+                    {/* Workspace Name */}
+                    <div className="flex-1 min-w-0 truncate">
+                      {workspace.workspaces.name}
+                    </div>
 
-                  {/* Role Badge */}
-                  {workspace.role === 'owner' && (
-                    <span className="text-xs text-gray-400">★</span>
-                  )}
-                </Link>
-              )
-            })}
-          </nav>
-        </div>
-
-        {/* Sidebar Footer - Coming Soon Section */}
-        <div className="p-4 border-t border-gray-200">
-          <div className="text-xs text-gray-500 text-center">
-            Stage 1B - Workspaces
-          </div>
+                    {/* Role Badge (owner only) */}
+                    {workspace.role === 'owner' && (
+                      <span className="text-xs text-text-tertiary">★</span>
+                    )}
+                  </Link>
+                ))}
+              </nav>
+            </>
+          )}
         </div>
       </aside>
 

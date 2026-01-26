@@ -1,30 +1,33 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
+
+  const redirect = searchParams.get('redirect') || '/dashboard'
 
   useEffect(() => {
     // Check if already logged in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        router.push('/dashboard')
+        router.push(redirect)
       } else {
         setLoading(false)
       }
     })
-  }, [router, supabase.auth])
+  }, [router, supabase.auth, redirect])
 
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirect)}`,
       },
     })
   }
@@ -33,31 +36,31 @@ export default function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirect)}`,
       },
     })
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-600">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-main-bg">
+        <div className="text-text-secondary">Loading...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
+    <div className="min-h-screen flex items-center justify-center bg-main-bg">
+      <div className="max-w-md w-full space-y-8 p-8 bg-card-bg rounded-xl shadow-card border border-card-border">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Team Sego</h2>
-          <p className="mt-2 text-sm text-gray-600">Sign in to your account</p>
+          <h2 className="text-3xl font-bold text-text-primary">Team Sego</h2>
+          <p className="mt-2 text-sm text-text-secondary">Sign in to your account</p>
         </div>
 
         <div className="space-y-4">
           <button
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-card-border rounded-lg hover:bg-sidebar-hover transition"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -77,12 +80,12 @@ export default function LoginPage() {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            <span className="text-gray-700 font-medium">Continue with Google</span>
+            <span className="text-text-primary font-medium">Continue with Google</span>
           </button>
 
           <button
             onClick={handleGitHubLogin}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+            className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-card-border rounded-lg hover:bg-sidebar-hover transition"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
               <path
@@ -91,7 +94,7 @@ export default function LoginPage() {
                 clipRule="evenodd"
               />
             </svg>
-            <span className="text-gray-700 font-medium">Continue with GitHub</span>
+            <span className="text-text-primary font-medium">Continue with GitHub</span>
           </button>
         </div>
       </div>
