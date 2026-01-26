@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { acceptInvite } from '@/app/actions/invite-actions'
+import { acceptInvite, declineInvite } from '@/app/actions/invite-actions'
 import { useRouter } from 'next/navigation'
 
 interface PendingInvite {
@@ -23,12 +23,14 @@ export function PendingInvitesBanner({ invites }: PendingInvitesBannerProps) {
   const router = useRouter()
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   if (invites.length === 0) return null
 
-  const handleAccept = async (token: string, inviteId: string) => {
+  const handleAccept = async (token: string, inviteId: string, workspaceName: string) => {
     setProcessingId(inviteId)
     setError(null)
+    setSuccessMessage(null)
 
     const result = await acceptInvite(token)
 
@@ -36,18 +38,36 @@ export function PendingInvitesBanner({ invites }: PendingInvitesBannerProps) {
       setError(result.error)
       setProcessingId(null)
     } else if (result.workspaceId) {
-      router.push(`/workspace/${result.workspaceId}`)
-      router.refresh()
+      setSuccessMessage(`Successfully joined ${workspaceName}!`)
+      setTimeout(() => {
+        router.push(`/workspace/${result.workspaceId}`)
+        router.refresh()
+      }, 1000)
     }
   }
 
-  const handleDecline = async (inviteId: string) => {
-    // TODO: Add decline functionality later
-    // For now, just refresh to hide it
+  const handleDecline = async (inviteId: string, workspaceName: string) => {
+    // Confirm before declining
+    if (!confirm(`Are you sure you want to decline the invite to ${workspaceName}?`)) {
+      return
+    }
+
     setProcessingId(inviteId)
-    setTimeout(() => {
-      router.refresh()
-    }, 500)
+    setError(null)
+    setSuccessMessage(null)
+
+    const result = await declineInvite(inviteId)
+
+    if (result.error) {
+      setError(result.error)
+      setProcessingId(null)
+    } else {
+      setSuccessMessage('Invite declined')
+      // Refresh to remove from list
+      setTimeout(() => {
+        router.refresh()
+      }, 1000)
+    }
   }
 
   return (
@@ -67,6 +87,17 @@ export function PendingInvitesBanner({ invites }: PendingInvitesBannerProps) {
               📩 You have {invites.length} pending invite{invites.length > 1 ? 's' : ''}
             </h3>
 
+            {/* Success Message */}
+            {successMessage && (
+              <div className="mb-3 text-sm text-success font-medium flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {successMessage}
+              </div>
+            )}
+
+            {/* Error Message */}
             {error && (
               <div className="mb-3 text-sm text-danger">
                 {error}
@@ -85,7 +116,7 @@ export function PendingInvitesBanner({ invites }: PendingInvitesBannerProps) {
                       <span className="font-medium text-text-primary">
                         {invite.workspace_name}
                       </span>
-                      <span className="text-xs text-text-tertiary">
+                      <span className="text-xs text-text-tertiary capitalize">
                         ({invite.workspace_type})
                       </span>
                     </div>
@@ -99,16 +130,16 @@ export function PendingInvitesBanner({ invites }: PendingInvitesBannerProps) {
                   {/* Actions */}
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleDecline(invite.id)}
+                      onClick={() => handleDecline(invite.id, invite.workspace_name)}
                       disabled={processingId === invite.id}
-                      className="px-3 py-1.5 text-sm font-medium text-text-primary hover:bg-sidebar-hover rounded-lg transition disabled:opacity-50"
+                      className="px-3 py-1.5 text-sm font-medium text-text-primary hover:bg-sidebar-hover rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Decline
+                      {processingId === invite.id ? 'Processing...' : 'Decline'}
                     </button>
                     <button
-                      onClick={() => handleAccept(invite.token, invite.id)}
+                      onClick={() => handleAccept(invite.token, invite.id, invite.workspace_name)}
                       disabled={processingId === invite.id}
-                      className="px-3 py-1.5 text-sm font-medium text-text-inverse bg-primary hover:bg-primary-hover rounded-lg transition disabled:opacity-50"
+                      className="px-3 py-1.5 text-sm font-medium text-text-inverse bg-primary hover:bg-primary-hover rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {processingId === invite.id ? 'Accepting...' : 'Accept'}
                     </button>

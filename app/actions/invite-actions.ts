@@ -97,11 +97,12 @@ export async function createInvite(
     return { error: error.message }
   }
 
-  // Generate invite URL
+  // Generate invite URL (this is for backup/email purposes)
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const inviteUrl = `${baseUrl}/invite/${token}`
 
   revalidatePath(`/workspace/${workspaceId}`)
+  revalidatePath('/dashboard')
   
   return { 
     success: true, 
@@ -185,9 +186,55 @@ export async function acceptInvite(token: string) {
     console.error('Error updating invite:', updateError)
   }
 
+  revalidatePath('/dashboard')
+  revalidatePath(`/workspace/${invite.workspace_id}`)
+
   return { 
     success: true, 
     workspaceId: invite.workspace_id,
     workspaceName: invite.workspaces?.name 
   }
+}
+
+export async function declineInvite(inviteId: string) {
+  const supabase = await createClient()
+  
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: 'Not authenticated' }
+  }
+
+  // Get invite to verify it belongs to this user's email
+  const { data: invite, error: inviteError } = await supabase
+    .from('invites')
+    .select('invited_email, workspace_id')
+    .eq('id', inviteId)
+    .single()
+
+  if (inviteError || !invite) {
+    return { error: 'Invite not found' }
+  }
+
+  // Verify the invite is for this user's email
+  const userEmail = user.email?.toLowerCase()
+  if (invite.invited_email !== userEmail) {
+    return { error: 'This invite is not for your email address' }
+  }
+
+  // Delete the invite (declining = removing it)
+  const { error: deleteError } = await supabase
+    .from('invites')
+    .delete()
+    .eq('id', inviteId)
+
+  if (deleteError) {
+    return { error: 'Failed to decline invite' }
+  }
+
+  revalidatePath('/dashboard')
+
+  return { success: true }
 }

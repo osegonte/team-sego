@@ -90,7 +90,7 @@ export function InviteMemberModal({
         <div className="px-6 py-4 border-b border-card-border">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-text-primary">
-              {showSuccess ? 'Invite Created' : 'Invite Member'}
+              {showSuccess ? 'Invite Sent!' : 'Invite Member'}
             </h2>
             <button
               onClick={handleClose}
@@ -116,36 +116,42 @@ export function InviteMemberModal({
               <svg className="w-5 h-5 text-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <div>
-                <p className="text-sm font-medium text-success mb-1">Invite created successfully!</p>
-                <p className="text-sm text-text-secondary">
-                  Share this link with <strong>{email}</strong>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-success mb-2">Invite created!</p>
+                <p className="text-sm text-text-secondary mb-2">
+                  <strong>{email}</strong> will see a notification when they log in to Team Sego.
+                </p>
+                <p className="text-xs text-text-tertiary">
+                  This invite expires in 7 days.
                 </p>
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-text-primary mb-2">
-                Invite Link
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={inviteUrl}
-                  readOnly
-                  className="flex-1 px-4 py-2 border border-card-border rounded-lg bg-sidebar-bg text-text-secondary text-sm font-mono"
-                />
-                <button
-                  onClick={copyToClipboard}
-                  className="px-4 py-2 text-sm font-medium text-text-inverse bg-primary hover:bg-primary-hover rounded-lg transition"
-                >
-                  Copy
-                </button>
+            {/* Backup Invite Link */}
+            <details className="text-sm">
+              <summary className="text-text-secondary cursor-pointer hover:text-text-primary mb-2">
+                Need a backup invite link?
+              </summary>
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-text-tertiary">
+                  The user will automatically see a notification when they log in. Only use this link if they need to access it directly:
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={inviteUrl}
+                    readOnly
+                    className="flex-1 px-3 py-2 border border-card-border rounded-lg bg-sidebar-bg text-text-secondary text-xs font-mono"
+                  />
+                  <button
+                    onClick={copyToClipboard}
+                    className="px-3 py-2 text-xs font-medium text-text-inverse bg-primary hover:bg-primary-hover rounded-lg transition"
+                  >
+                    Copy
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-text-tertiary mt-2">
-                This link expires in 7 days
-              </p>
-            </div>
+            </details>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
@@ -167,8 +173,11 @@ export function InviteMemberModal({
                 placeholder="colleague@example.com"
                 required
                 disabled={isInviting}
-                className="w-full px-4 py-2 border border-card-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-card-bg text-text-primary"
+                className="w-full px-4 py-2 border border-card-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-card-bg text-text-primary disabled:opacity-50"
               />
+              <p className="text-xs text-text-tertiary mt-1">
+                They'll see a notification when they log in
+              </p>
             </div>
 
             {/* Role Selection */}
@@ -234,7 +243,7 @@ export function InviteMemberModal({
                 disabled={isInviting || !email.trim()}
                 className="px-4 py-2 text-sm font-medium text-text-inverse bg-primary hover:bg-primary-hover rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isInviting ? 'Creating...' : 'Create Invite'}
+                {isInviting ? 'Sending...' : 'Send Invite'}
               </button>
             </>
           )}
