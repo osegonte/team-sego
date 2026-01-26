@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { createWorkspace } from '@/app/actions/workspace-actions'
 
 interface CreateWorkspaceModalProps {
   isOpen: boolean
@@ -11,7 +11,6 @@ interface CreateWorkspaceModalProps {
 
 export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalProps) {
   const router = useRouter()
-  const supabase = createClient()
   
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -25,50 +24,28 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
     setIsCreating(true)
 
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const result = await createWorkspace(
+        name,
+        description || null,
+        workspaceType
+      )
       
-      if (!user) {
-        throw new Error('Not authenticated')
+      if (result.error) {
+        setError(result.error)
+        setIsCreating(false)
+      } else if (result.workspaceId) {
+        // Reset form
+        setName('')
+        setDescription('')
+        setWorkspaceType('team')
+        
+        // Close modal and navigate
+        onClose()
+        router.push(`/workspace/${result.workspaceId}`)
+        router.refresh()
       }
-
-      // Create workspace
-      const { data: workspace, error: workspaceError } = await supabase
-        .from('workspaces')
-        .insert({
-          owner_id: user.id,
-          name: name.trim(),
-          description: description.trim() || null,
-          workspace_type: workspaceType
-        })
-        .select()
-        .single()
-
-      if (workspaceError) throw workspaceError
-
-      // Create membership for owner
-      const { error: memberError } = await supabase
-        .from('workspace_members')
-        .insert({
-          workspace_id: workspace.id,
-          user_id: user.id,
-          role: 'owner',
-          status: 'active'
-        })
-
-      if (memberError) throw memberError
-
-      // Reset form
-      setName('')
-      setDescription('')
-      setWorkspaceType('team')
-      
-      // Close modal and refresh
-      onClose()
-      router.refresh()
-      
     } catch (err: any) {
       setError(err.message || 'Failed to create workspace')
-    } finally {
       setIsCreating(false)
     }
   }
@@ -85,6 +62,7 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
             <button
               onClick={onClose}
               className="text-text-tertiary hover:text-text-secondary transition"
+              disabled={isCreating}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -112,7 +90,8 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., Team Sego Dev"
               required
-              className="w-full px-4 py-2 border border-card-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-card-bg text-text-primary"
+              disabled={isCreating}
+              className="w-full px-4 py-2 border border-card-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-card-bg text-text-primary disabled:opacity-50"
             />
           </div>
 
@@ -127,12 +106,14 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
                   key={type}
                   type="button"
                   onClick={() => setWorkspaceType(type)}
+                  disabled={isCreating}
                   className={`
                     px-4 py-2 rounded-lg border-2 text-sm font-medium transition
                     ${workspaceType === type
                       ? 'border-primary bg-primary-light text-primary'
                       : 'border-card-border text-text-primary hover:border-card-border-hover'
                     }
+                    disabled:opacity-50 disabled:cursor-not-allowed
                   `}
                 >
                   {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -151,7 +132,8 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What's this workspace for?"
               rows={3}
-              className="w-full px-4 py-2 border border-card-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none bg-card-bg text-text-primary"
+              disabled={isCreating}
+              className="w-full px-4 py-2 border border-card-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none bg-card-bg text-text-primary disabled:opacity-50"
             />
           </div>
         </form>
@@ -162,7 +144,7 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
             type="button"
             onClick={onClose}
             disabled={isCreating}
-            className="px-4 py-2 text-sm font-medium text-text-primary hover:bg-sidebar-hover rounded-lg transition"
+            className="px-4 py-2 text-sm font-medium text-text-primary hover:bg-sidebar-hover rounded-lg transition disabled:opacity-50"
           >
             Cancel
           </button>

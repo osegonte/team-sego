@@ -2,19 +2,23 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AcceptInviteClient } from '@/components/invites/accept-invite-client'
 
-export default async function InvitePage({ params }: { params: { token: string } }) {
+export default async function InvitePage({ 
+  params 
+}: { 
+  params: Promise<{ token: string }> 
+}) {
+  const { token } = await params
+  
   const supabase = await createClient()
   
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // If not logged in, redirect to login with return URL
   if (!user) {
-    redirect(`/login?redirect=/invite/${params.token}`)
+    redirect(`/login?redirect=/invite/${token}`)
   }
 
-  // Fetch invite details
   const { data: invite, error } = await supabase
     .from('invites')
     .select(`
@@ -22,10 +26,9 @@ export default async function InvitePage({ params }: { params: { token: string }
       workspaces(name, description, workspace_type),
       profiles:created_by(display_name, username)
     `)
-    .eq('token', params.token)
+    .eq('token', token)
     .single()
 
-  // Invalid token
   if (error || !invite) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-main-bg p-4">
@@ -50,13 +53,9 @@ export default async function InvitePage({ params }: { params: { token: string }
     )
   }
 
-  // Check if expired
   const isExpired = new Date(invite.expires_at) < new Date()
-
-  // Check if already accepted
   const isAccepted = !!invite.accepted_by
 
-  // Check if user is already a member
   const { data: existingMember } = await supabase
     .from('workspace_members')
     .select('id')
@@ -69,7 +68,7 @@ export default async function InvitePage({ params }: { params: { token: string }
 
   return (
     <AcceptInviteClient
-      token={params.token}
+      token={token}
       workspaceName={invite.workspaces?.name || 'Unknown Workspace'}
       workspaceDescription={invite.workspaces?.description}
       workspaceType={invite.workspaces?.workspace_type}

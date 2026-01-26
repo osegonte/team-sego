@@ -32,17 +32,45 @@ export async function createInvite(
     return { error: 'Permission denied' }
   }
 
-  // Check if user is already a member
-  const { data: existingMember } = await supabase
-    .from('workspace_members')
+  // Check if a user with this email exists and is already a member
+  const normalizedEmail = email.toLowerCase().trim()
+  
+  // First, get the user ID for this email (if they exist)
+  const { data: existingProfile } = await supabase
+    .from('profiles')
     .select('id')
-    .eq('workspace_id', workspaceId)
-    .eq('user_id', user.id)
-    .eq('status', 'active')
+    .eq('email', normalizedEmail)
     .single()
 
-  if (existingMember) {
-    return { error: 'User is already a member of this workspace' }
+  // If user exists, check if they're already a member
+  if (existingProfile) {
+    const { data: existingMembership } = await supabase
+      .from('workspace_members')
+      .select('id')
+      .eq('workspace_id', workspaceId)
+      .eq('user_id', existingProfile.id)
+      .eq('status', 'active')
+      .single()
+
+    if (existingMembership) {
+      return { error: 'This user is already a member of this workspace' }
+    }
+  }
+
+  // Check if there's already a pending invite for this email
+  const { data: existingInvite } = await supabase
+    .from('invites')
+    .select('id, expires_at, accepted_by')
+    .eq('workspace_id', workspaceId)
+    .eq('invited_email', normalizedEmail)
+    .is('accepted_by', null)
+    .single()
+
+  if (existingInvite) {
+    const isExpired = new Date(existingInvite.expires_at) < new Date()
+    if (!isExpired) {
+      return { error: 'An invite has already been sent to this email' }
+    }
   }
 
   // Generate unique token
@@ -56,7 +84,7 @@ export async function createInvite(
     .from('invites')
     .insert({
       workspace_id: workspaceId,
-      invited_email: email.toLowerCase().trim(),
+      invited_email: normalizedEmail,
       role_to_grant: role,
       token,
       expires_at: expiresAt.toISOString(),

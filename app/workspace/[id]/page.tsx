@@ -4,7 +4,14 @@ import { AppLayout } from '@/components/layout/app-layout'
 import { MemberRow } from '@/components/workspaces/member-row'
 import { InviteButton } from '@/components/workspaces/invite-button'
 
-export default async function WorkspacePage({ params }: { params: { id: string } }) {
+export default async function WorkspacePage({ 
+  params 
+}: { 
+  params: Promise<{ id: string }> 
+}) {
+  // Await params in Next.js 16+
+  const { id } = await params
+  
   const supabase = await createClient()
   
   const {
@@ -19,7 +26,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
   const { data: workspace, error: workspaceError } = await supabase
     .from('workspaces')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .single()
 
   if (workspaceError || !workspace) {
@@ -30,7 +37,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
   const { data: membership } = await supabase
     .from('workspace_members')
     .select('role, status')
-    .eq('workspace_id', params.id)
+    .eq('workspace_id', id)
     .eq('user_id', user.id)
     .eq('status', 'active')
     .single()
@@ -55,7 +62,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
         avatar_url
       )
     `)
-    .eq('workspace_id', params.id)
+    .eq('workspace_id', id)
     .eq('status', 'active')
 
   // Fetch all user's workspaces for sidebar
@@ -86,7 +93,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
   const canManageMembers = isAdmin
 
   return (
-    <AppLayout user={user} workspaces={workspaces} currentWorkspaceId={params.id}>
+    <AppLayout user={user} workspaces={workspaces} currentWorkspaceId={id}>
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Workspace Header */}
         <div className="mb-8">
@@ -134,9 +141,9 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                 Members ({members?.length || 0})
               </h2>
               
-              {/* Invite Button (Admin/Owner Only) - Now Functional */}
+              {/* Invite Button (Admin/Owner Only) */}
               {canManageMembers && (
-                <InviteButton workspaceId={params.id} workspaceName={workspace.name} />
+                <InviteButton workspaceId={id} workspaceName={workspace.name} />
               )}
             </div>
           </div>
@@ -153,7 +160,7 @@ export default async function WorkspacePage({ params }: { params: { id: string }
                   <MemberRow
                     key={member.id}
                     membershipId={member.id}
-                    workspaceId={params.id}
+                    workspaceId={id}
                     displayName={displayName}
                     joinedAt={member.joined_at}
                     role={member.role}
