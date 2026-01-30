@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createInvite } from '@/app/actions/invite-actions'
+import { WORKSPACE_ROLES, type WorkspaceRole } from '@/lib/types/workspace'
 
 interface InviteMemberModalProps {
   isOpen: boolean
@@ -10,13 +11,6 @@ interface InviteMemberModalProps {
   workspaceName: string
 }
 
-const ROLES = [
-  { value: 'viewer', label: 'Viewer', description: 'Can only view content' },
-  { value: 'editor', label: 'Editor', description: 'Can create and edit content' },
-  { value: 'admin', label: 'Admin', description: 'Can manage members and settings' },
-  { value: 'owner', label: 'Owner', description: 'Full access including workspace deletion' },
-] as const
-
 export function InviteMemberModal({
   isOpen,
   onClose,
@@ -24,7 +18,7 @@ export function InviteMemberModal({
   workspaceName,
 }: InviteMemberModalProps) {
   const [email, setEmail] = useState('')
-  const [selectedRole, setSelectedRole] = useState<'owner' | 'admin' | 'editor' | 'viewer'>('viewer')
+  const [selectedRole, setSelectedRole] = useState<WorkspaceRole>('viewer')
   const [isInviting, setIsInviting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
@@ -38,7 +32,6 @@ export function InviteMemberModal({
       return
     }
 
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       setError('Please enter a valid email address')
@@ -48,19 +41,14 @@ export function InviteMemberModal({
     setError(null)
     setIsInviting(true)
 
-    try {
-      const result = await createInvite(workspaceId, email, selectedRole)
-      
-      if (result.error) {
-        setError(result.error)
-        setIsInviting(false)
-      } else if (result.inviteUrl) {
-        setInviteUrl(result.inviteUrl)
-        setShowSuccess(true)
-        setIsInviting(false)
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to create invite')
+    const result = await createInvite(workspaceId, email, selectedRole)
+    
+    if ('error' in result) {
+      setError(result.error)
+      setIsInviting(false)
+    } else if (result.data) {
+      setInviteUrl(result.data.inviteUrl)
+      setShowSuccess(true)
       setIsInviting(false)
     }
   }
@@ -77,7 +65,6 @@ export function InviteMemberModal({
   const copyToClipboard = async () => {
     if (inviteUrl) {
       await navigator.clipboard.writeText(inviteUrl)
-      // Could add a toast notification here
     }
   }
 
@@ -86,11 +73,10 @@ export function InviteMemberModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-card-bg rounded-xl shadow-dropdown max-w-md w-full">
-        {/* Modal Header */}
         <div className="px-6 py-4 border-b border-card-border">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-text-primary">
-              {showSuccess ? 'Invite Sent!' : 'Invite Member'}
+              {showSuccess ? 'Invitation Sent' : 'Invite Member'}
             </h2>
             <button
               onClick={handleClose}
@@ -104,37 +90,27 @@ export function InviteMemberModal({
           </div>
           {!showSuccess && (
             <p className="text-sm text-text-secondary mt-1">
-              Invite someone to join <span className="font-medium">{workspaceName}</span>
+              Invite someone to join {workspaceName}
             </p>
           )}
         </div>
 
-        {/* Modal Body */}
         {showSuccess && inviteUrl ? (
           <div className="px-6 py-4 space-y-4">
-            <div className="flex items-start gap-3 p-4 bg-success-light rounded-lg border border-success">
-              <svg className="w-5 h-5 text-success flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-success mb-2">Invite created!</p>
-                <p className="text-sm text-text-secondary mb-2">
-                  <strong>{email}</strong> will see a notification when they log in to Team Sego.
-                </p>
-                <p className="text-xs text-text-tertiary">
-                  This invite expires in 7 days.
-                </p>
-              </div>
-            </div>
+            <p className="text-sm text-text-secondary">
+              Invitation sent to <strong className="text-text-primary">{email}</strong>
+            </p>
+            <p className="text-xs text-text-tertiary">
+              They will see a notification when they log in to Team Sego. This invite expires in 7 days.
+            </p>
 
-            {/* Backup Invite Link */}
             <details className="text-sm">
               <summary className="text-text-secondary cursor-pointer hover:text-text-primary mb-2">
-                Need a backup invite link?
+                Backup invite link
               </summary>
               <div className="mt-2 space-y-2">
                 <p className="text-xs text-text-tertiary">
-                  The user will automatically see a notification when they log in. Only use this link if they need to access it directly:
+                  Only use this link if they need direct access:
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -145,7 +121,7 @@ export function InviteMemberModal({
                   />
                   <button
                     onClick={copyToClipboard}
-                    className="px-3 py-2 text-xs font-medium text-text-inverse bg-primary hover:bg-primary-hover rounded-lg transition"
+                    className="px-3 py-2 text-xs font-medium text-text-secondary hover:bg-sidebar-hover border border-card-border rounded-lg transition"
                   >
                     Copy
                   </button>
@@ -161,7 +137,6 @@ export function InviteMemberModal({
               </div>
             )}
 
-            {/* Email Input */}
             <div>
               <label className="block text-sm font-medium text-text-primary mb-2">
                 Email Address *
@@ -180,18 +155,17 @@ export function InviteMemberModal({
               </p>
             </div>
 
-            {/* Role Selection */}
             <div>
               <label className="block text-sm font-medium text-text-primary mb-2">
                 Role
               </label>
               <div className="space-y-2">
-                {ROLES.map((role) => (
+                {(Object.entries(WORKSPACE_ROLES) as [WorkspaceRole, typeof WORKSPACE_ROLES[WorkspaceRole]][]).map(([roleValue, roleData]) => (
                   <label
-                    key={role.value}
+                    key={roleValue}
                     className={`
                       flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition
-                      ${selectedRole === role.value
+                      ${selectedRole === roleValue
                         ? 'border-primary bg-primary-light'
                         : 'border-card-border hover:border-card-border-hover'
                       }
@@ -200,16 +174,16 @@ export function InviteMemberModal({
                     <input
                       type="radio"
                       name="role"
-                      value={role.value}
-                      checked={selectedRole === role.value}
-                      onChange={(e) => setSelectedRole(e.target.value as any)}
+                      value={roleValue}
+                      checked={selectedRole === roleValue}
+                      onChange={(e) => setSelectedRole(e.target.value as WorkspaceRole)}
                       className="mt-1"
                       disabled={isInviting}
                     />
                     <div className="flex-1">
-                      <div className="font-medium text-text-primary">{role.label}</div>
+                      <div className="font-medium text-text-primary">{roleData.label}</div>
                       <p className="text-xs text-text-secondary mt-0.5">
-                        {role.description}
+                        {roleData.description}
                       </p>
                     </div>
                   </label>
@@ -219,12 +193,11 @@ export function InviteMemberModal({
           </form>
         )}
 
-        {/* Modal Footer */}
         <div className="px-6 py-4 bg-sidebar-bg rounded-b-xl flex justify-end gap-3">
           {showSuccess ? (
             <button
               onClick={handleClose}
-              className="px-4 py-2 text-sm font-medium text-text-inverse bg-primary hover:bg-primary-hover rounded-lg transition"
+              className="px-4 py-2 text-sm font-medium text-text-secondary hover:bg-sidebar-hover border border-card-border rounded-lg transition"
             >
               Done
             </button>

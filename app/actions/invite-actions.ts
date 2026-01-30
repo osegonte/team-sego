@@ -1,42 +1,27 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { randomBytes } from 'crypto'
 import { sendInviteEmail } from '@/lib/email'
-
-// Service role client for privileged operations (bypasses RLS)
-function getServiceClient() {
-  return createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  )
-}
+import type { ActionResult } from '@/lib/types/actions'
+import type { WorkspaceRole } from '@/lib/types/workspace'
 
 export async function createInvite(
   workspaceId: string,
   email: string,
-  role: 'owner' | 'admin' | 'editor' | 'viewer'
-) {
+  role: WorkspaceRole
+): Promise<ActionResult<{ inviteUrl: string; token: string; emailSent: boolean }>> {
   const supabase = await createClient()
-  const supabaseAdmin = getServiceClient()
+  const supabaseAdmin = getAdminClient()
   
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
     return { error: 'Not authenticated' }
   }
 
-  // Check if current user can invite (admin or owner)
   const { data: membership } = await supabase
     .from('workspace_members')
     .select('role')
@@ -49,7 +34,6 @@ export async function createInvite(
     return { error: 'Permission denied' }
   }
 
-  // Check if a user with this email exists and is already a member
   const normalizedEmail = email.toLowerCase().trim()
   
   const { data: existingProfile } = await supabase
@@ -72,7 +56,6 @@ export async function createInvite(
     }
   }
 
-  // Check if there's already a pending invite for this email
   const { data: existingInvite } = await supabase
     .from('invites')
     .select('id, expires_at, accepted_by')
@@ -88,14 +71,10 @@ export async function createInvite(
     }
   }
 
-  // Generate unique token
   const token = randomBytes(32).toString('hex')
-
-  // Create invite (expires in 7 days)
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + 7)
 
-  // Use service role to bypass RLS
   const { data: invite, error } = await supabaseAdmin
     .from('invites')
     .insert({
@@ -110,14 +89,13 @@ export async function createInvite(
     .single()
 
   if (error) {
-    console.error('Failed to create invite:', error)
-    return { error: error.message }
+    console.error('[createInvite]', error)
+    return { error: 'Failed to create invite' }
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const inviteUrl = `${baseUrl}/invite/${token}`
 
-  // Get inviter name for email
   const { data: inviterProfile } = await supabase
     .from('profiles')
     .select('display_name, username')
@@ -126,14 +104,12 @@ export async function createInvite(
 
   const inviterName = inviterProfile?.display_name || inviterProfile?.username || user.email?.split('@')[0] || 'Someone'
 
-  // Get workspace name for email
   const { data: workspace } = await supabaseAdmin
     .from('workspaces')
     .select('name')
     .eq('id', workspaceId)
     .single()
 
-  // Send email invitation
   const emailResult = await sendInviteEmail({
     to: normalizedEmail,
     inviterName,
@@ -144,10 +120,7 @@ export async function createInvite(
   })
 
   if (emailResult.error) {
-    console.error('⚠️ Failed to send invite email:', emailResult.error)
-    // Don't fail the whole invite if email fails - user can still see in-app notification
-  } else {
-    console.log('✅ Invite email sent successfully to:', normalizedEmail)
+    console.error('[createInvite] Email failed:', emailResult.error)
   }
 
   revalidatePath(`/workspace/${workspaceId}`)
@@ -156,27 +129,24 @@ export async function createInvite(
   
   return { 
     success: true, 
-    inviteUrl,
-    token,
-    emailSent: !emailResult.error 
+    data: {
+      inviteUrl,
+      token,
+      emailSent: !emailResult.error
+    }
   }
 }
 
-export async function acceptInvite(token: string) {
+export async function acceptInvite(token: string): Promise<ActionResult<{ workspaceId: string; workspaceName: string | null }>> {
   const supabase = await createClient()
-  const supabaseAdmin = getServiceClient()
+  const supabaseAdmin = getAdminClient()
   
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    return { error: 'Not authenticated', requiresLogin: true }
+    return { error: 'Not authenticated' }
   }
 
-  console.log('🔍 Accepting invite:', { token, userId: user.id, userEmail: user.email })
-
-  // Get invite using SERVICE ROLE (bypasses RLS - critical for new users!)
   const { data: invite, error: inviteError } = await supabaseAdmin
     .from('invites')
     .select('*, workspaces(name)')
@@ -184,34 +154,23 @@ export async function acceptInvite(token: string) {
     .single()
 
   if (inviteError || !invite) {
-    console.error('❌ Failed to fetch invite:', inviteError)
+    console.error('[acceptInvite]', inviteError)
     return { error: 'Invite not found or invalid' }
   }
 
-  console.log('✅ Invite found:', {
-    inviteId: invite.id,
-    workspaceName: invite.workspaces?.name,
-    invitedEmail: invite.invited_email,
-    acceptedBy: invite.accepted_by
-  })
-
-  // Check if already accepted
   if (invite.accepted_by) {
     return { error: 'This invite has already been used' }
   }
 
-  // Check if expired
   if (new Date(invite.expires_at) < new Date()) {
     return { error: 'This invite has expired' }
   }
 
-  // Verify invite is for this user's email
   const userEmail = user.email?.toLowerCase()
   if (invite.invited_email !== userEmail) {
     return { error: 'This invite is not for your email address' }
   }
 
-  // Check if user is already a member using service role
   const { data: existingMember } = await supabaseAdmin
     .from('workspace_members')
     .select('id')
@@ -222,14 +181,10 @@ export async function acceptInvite(token: string) {
 
   if (existingMember) {
     return { 
-      error: 'You are already a member of this workspace',
-      workspaceId: invite.workspace_id 
+      error: 'You are already a member of this workspace'
     }
   }
 
-  console.log('🔨 Creating workspace membership...')
-
-  // Create membership using service role (bypasses RLS)
   const { error: memberError } = await supabaseAdmin
     .from('workspace_members')
     .insert({
@@ -240,14 +195,11 @@ export async function acceptInvite(token: string) {
     })
 
   if (memberError) {
-    console.error('❌ Failed to create membership:', memberError)
-    return { error: 'Failed to accept invite. Please try again.' }
+    console.error('[acceptInvite] Membership creation failed:', memberError)
+    return { error: 'Failed to accept invite' }
   }
 
-  console.log('✅ Workspace membership created successfully')
-
-  // Mark invite as accepted using service role
-  const { error: updateError } = await supabaseAdmin
+  await supabaseAdmin
     .from('invites')
     .update({
       accepted_by: user.id,
@@ -255,38 +207,31 @@ export async function acceptInvite(token: string) {
     })
     .eq('token', token)
 
-  if (updateError) {
-    console.error('⚠️ Error updating invite (non-critical):', updateError)
-  } else {
-    console.log('✅ Invite marked as accepted')
-  }
-
   revalidatePath('/dashboard')
   revalidatePath('/notifications')
   revalidatePath(`/workspace/${invite.workspace_id}`)
 
   return { 
     success: true, 
-    workspaceId: invite.workspace_id,
-    workspaceName: invite.workspaces?.name 
+    data: {
+      workspaceId: invite.workspace_id,
+      workspaceName: invite.workspaces?.name || null
+    }
   }
 }
 
-export async function declineInvite(inviteId: string) {
+export async function declineInvite(inviteId: string): Promise<ActionResult> {
   const supabase = await createClient()
   
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
     return { error: 'Not authenticated' }
   }
 
-  // Get invite to verify it belongs to this user's email
   const { data: invite, error: inviteError } = await supabase
     .from('invites')
-    .select('invited_email, workspace_id')
+    .select('invited_email')
     .eq('id', inviteId)
     .single()
 
@@ -294,20 +239,18 @@ export async function declineInvite(inviteId: string) {
     return { error: 'Invite not found' }
   }
 
-  // Verify the invite is for this user's email
   const userEmail = user.email?.toLowerCase()
   if (invite.invited_email !== userEmail) {
     return { error: 'This invite is not for your email address' }
   }
 
-  // Delete the invite (RLS allows this)
   const { error: deleteError } = await supabase
     .from('invites')
     .delete()
     .eq('id', inviteId)
 
   if (deleteError) {
-    console.error('Failed to decline invite:', deleteError)
+    console.error('[declineInvite]', deleteError)
     return { error: 'Failed to decline invite' }
   }
 
@@ -316,3 +259,4 @@ export async function declineInvite(inviteId: string) {
 
   return { success: true }
 }
+

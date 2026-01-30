@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { AppLayout } from '@/components/layout/app-layout'
-import { PendingInvitesBanner } from '@/components/invites/pending-invites-banner'
+import Link from 'next/link'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -15,26 +15,14 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
-  // Fetch user profile
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single()
 
-  // Use service role to fetch workspaces (avoids RLS recursion)
-  const supabaseAdmin = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  )
+  const supabaseAdmin = getAdminClient()
 
-  // Fetch user's workspace memberships
   const { data: memberships } = await supabaseAdmin
     .from('workspace_members')
     .select('workspace_id, role, status')
@@ -57,68 +45,49 @@ export default async function DashboardPage() {
     }
   }).filter(w => w.workspaces) || []
 
-  // Fetch pending invites for this user's email
   const userEmail = user.email?.toLowerCase()
   const { data: pendingInvites } = await supabase
     .from('invites')
-    .select(`
-      id,
-      token,
-      role_to_grant,
-      workspace_id,
-      created_at,
-      created_by,
-      workspaces(name, workspace_type)
-    `)
+    .select('id')
     .eq('invited_email', userEmail)
     .is('accepted_by', null)
     .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false })
 
-  // Fetch inviter profiles separately to avoid relationship errors
-  const inviterIds = pendingInvites?.map(inv => inv.created_by).filter(Boolean) || []
-  const { data: inviterProfiles } = await supabase
-    .from('profiles')
-    .select('id, display_name, username')
-    .in('id', inviterIds)
-
-  // Format invites for the banner
-  const formattedInvites = pendingInvites?.map(invite => {
-    const inviterProfile = inviterProfiles?.find(p => p.id === invite.created_by)
-    return {
-      id: invite.id,
-      token: invite.token,
-      role_to_grant: invite.role_to_grant,
-      workspace_id: invite.workspace_id,
-      workspace_name: invite.workspaces?.name || 'Unknown Workspace',
-      workspace_type: invite.workspaces?.workspace_type || 'team',
-      inviter_name: inviterProfile?.display_name || inviterProfile?.username || 'Someone',
-      created_at: invite.created_at
-    }
-  }) || []
-
-  // Get display name
-  const displayName = profile?.display_name || user.email?.split('@')[0] || 'there'
+  const inviteCount = pendingInvites?.length || 0
 
   return (
     <AppLayout user={user} workspaces={workspaces}>
       <div className="max-w-5xl mx-auto px-6 py-8">
-        {/* Pending Invites Notification Banner */}
-        <PendingInvitesBanner invites={formattedInvites} />
+        {inviteCount > 0 && (
+          <Link 
+            href="/notifications"
+            className="block mb-6 bg-card-bg border border-card-border rounded-lg p-4 hover:border-primary transition"
+          >
+            <div className="flex items-center gap-3">
+              <svg className="w-5 h-5 text-text-tertiary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76" />
+              </svg>
+              <span className="text-sm text-text-secondary">
+                {inviteCount} pending workspace invitation{inviteCount > 1 ? 's' : ''}
+              </span>
+            </div>
+          </Link>
+        )}
 
-        {/* Welcome Message */}
-        <div className="flex items-center justify-center h-full">
-          <div className="text-center">
-            <h1 className="text-2xl font-semibold text-text-primary mb-2">
-              Welcome back, {displayName}
-            </h1>
-            <p className="text-text-secondary">
-              {workspaces.length > 0 
-                ? 'Select a workspace from the sidebar to get started'
-                : 'Create your first workspace to get started'}
-            </p>
+        {workspaces.length === 0 && (
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-sidebar-bg flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <p className="text-text-secondary text-sm">
+                No workspaces yet. Create one using the + button in the sidebar.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </AppLayout>
   )

@@ -31,14 +31,12 @@ export function MemberRow({
     <>
       <div className="px-6 py-4 flex items-center justify-between hover:bg-sidebar-hover transition">
         <div className="flex items-center gap-3">
-          {/* Avatar */}
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center">
             <span className="text-text-inverse text-sm font-semibold">
               {displayName.substring(0, 1).toUpperCase()}
             </span>
           </div>
 
-          {/* Name & Info */}
           <div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-text-primary">
@@ -54,19 +52,11 @@ export function MemberRow({
           </div>
         </div>
 
-        {/* Role Badge & Actions */}
         <div className="flex items-center gap-3">
-          <span className={`
-            px-3 py-1 rounded-lg text-xs font-medium
-            ${role === 'owner' ? 'bg-purple-100 text-purple-700' : 
-              role === 'admin' ? 'bg-blue-100 text-blue-700' :
-              role === 'editor' ? 'bg-green-100 text-green-700' :
-              'bg-gray-100 text-gray-700'}
-          `}>
+          <span className="px-2 py-1 rounded text-xs bg-sidebar-bg text-text-secondary border border-card-border">
             {role}
           </span>
 
-          {/* Actions Menu (Admin/Owner only, can't manage yourself) */}
           {canManageMembers && !isCurrentUser && (
             <MemberActionsDropdown
               onChangeRole={() => setIsChangeRoleModalOpen(true)}
@@ -76,7 +66,6 @@ export function MemberRow({
         </div>
       </div>
 
-      {/* Change Role Modal */}
       <ChangeRoleModal
         isOpen={isChangeRoleModalOpen}
         onClose={() => setIsChangeRoleModalOpen(false)}
@@ -86,7 +75,6 @@ export function MemberRow({
         currentRole={role}
       />
 
-      {/* Remove Member Modal */}
       <RemoveMemberModal
         isOpen={isRemoveModalOpen}
         onClose={() => setIsRemoveModalOpen(false)}

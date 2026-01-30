@@ -1,10 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
 import { AppLayout } from '@/components/layout/app-layout'
 import { MemberRow } from '@/components/workspaces/member-row'
 import { InviteButton } from '@/components/workspaces/invite-button'
-import { DeleteWorkspaceButton } from '@/components/workspaces/delete-workspace-button'
 
 export default async function WorkspacePage({ 
   params 
@@ -23,19 +22,8 @@ export default async function WorkspacePage({
     redirect('/login')
   }
 
-  // Use service role to avoid RLS recursion
-  const supabaseAdmin = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  )
+  const supabaseAdmin = getAdminClient()
 
-  // Fetch workspace
   const { data: workspace, error: workspaceError } = await supabaseAdmin
     .from('workspaces')
     .select('*')
@@ -46,7 +34,6 @@ export default async function WorkspacePage({
     redirect('/dashboard')
   }
 
-  // Check if user is a member
   const { data: membership } = await supabaseAdmin
     .from('workspace_members')
     .select('role, status')
@@ -59,7 +46,6 @@ export default async function WorkspacePage({
     redirect('/dashboard')
   }
 
-  // Fetch all members
   const { data: members } = await supabaseAdmin
     .from('workspace_members')
     .select(`
@@ -77,7 +63,10 @@ export default async function WorkspacePage({
     .eq('workspace_id', id)
     .eq('status', 'active')
 
-  // Fetch all user's workspaces for sidebar
+  console.log('[workspace] ID:', id)
+  console.log('[workspace] Members count:', members?.length || 0)
+  console.log('[workspace] Members data:', JSON.stringify(members, null, 2))
+
   const { data: allMemberships } = await supabaseAdmin
     .from('workspace_members')
     .select('workspace_id, role, status')
@@ -104,66 +93,47 @@ export default async function WorkspacePage({
   const isAdmin = membership.role === 'admin' || isOwner
   const canManageMembers = isAdmin
 
+  const memberCount = members?.length || 0
+
   return (
     <AppLayout user={user} workspaces={workspaces} currentWorkspaceId={id}>
       <div className="max-w-5xl mx-auto px-6 py-8">
-        {/* Workspace Header */}
         <div className="mb-8">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-semibold text-text-primary mb-2">
-                {workspace.name}
-              </h1>
-              {workspace.description && (
-                <p className="text-text-secondary">
-                  {workspace.description}
-                </p>
-              )}
-            </div>
+          <h1 className="text-3xl font-semibold text-text-primary mb-2">
+            {workspace.name}
+          </h1>
+          {workspace.description && (
+            <p className="text-text-secondary">
+              {workspace.description}
+            </p>
+          )}
 
-            {/* Delete Button (Owner Only) */}
-            {isOwner && (
-              <DeleteWorkspaceButton 
-                workspaceId={id} 
-                workspaceName={workspace.name}
-              />
-            )}
-          </div>
-
-          {/* Workspace Info */}
-          <div className="flex items-center gap-4 text-sm text-text-tertiary">
-            <div className="flex items-center gap-2">
-              <span className="capitalize">{workspace.workspace_type}</span>
-            </div>
+          <div className="flex items-center gap-4 text-sm text-text-tertiary mt-4">
+            <span className="capitalize">{workspace.workspace_type}</span>
             <span>•</span>
-            <div className="flex items-center gap-2">
-              <span className="capitalize font-medium text-text-secondary">Your role: {membership.role}</span>
-            </div>
+            <span className="capitalize font-medium text-text-secondary">
+              Your role: {membership.role}
+            </span>
             <span>•</span>
-            <div>
-              Created {new Date(workspace.created_at).toLocaleDateString()}
-            </div>
+            <span>Created {new Date(workspace.created_at).toLocaleDateString()}</span>
           </div>
         </div>
 
-        {/* Members Section */}
         <div className="bg-card-bg rounded-lg border border-card-border">
           <div className="px-6 py-4 border-b border-card-border">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-text-primary">
-                Members ({members?.length || 0})
+                Members ({memberCount})
               </h2>
               
-              {/* Invite Button (Admin/Owner Only) */}
               {canManageMembers && (
                 <InviteButton workspaceId={id} workspaceName={workspace.name} />
               )}
             </div>
           </div>
 
-          {/* Members List */}
           <div className="divide-y divide-card-border">
-            {members && members.length > 0 ? (
+            {memberCount > 0 ? (
               members.map((member: any) => {
                 const profile = member.profiles
                 const displayName = profile?.display_name || profile?.username || 'Unknown User'
@@ -184,24 +154,9 @@ export default async function WorkspacePage({
               })
             ) : (
               <div className="px-6 py-12 text-center">
-                <p className="text-text-tertiary">No members yet</p>
+                <p className="text-sm text-text-secondary">This workspace is ready for members.</p>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Coming Soon Sections */}
-        <div className="mt-8 grid gap-6 md:grid-cols-2">
-          {/* Projects Section - Coming in Stage 2 */}
-          <div className="bg-card-bg rounded-lg border border-card-border p-6">
-            <h3 className="text-sm font-semibold text-text-primary mb-2">Projects</h3>
-            <p className="text-xs text-text-tertiary">Coming in Stage 2</p>
-          </div>
-
-          {/* Activity Section - Coming Later */}
-          <div className="bg-card-bg rounded-lg border border-card-border p-6">
-            <h3 className="text-sm font-semibold text-text-primary mb-2">Recent Activity</h3>
-            <p className="text-xs text-text-tertiary">Coming soon</p>
           </div>
         </div>
       </div>

@@ -15,7 +15,7 @@ export function InviteButton({ workspaceId, workspaceName }: InviteButtonProps) 
     <>
       <button
         onClick={() => setIsModalOpen(true)}
-        className="px-4 py-2 text-sm font-medium text-text-inverse bg-primary hover:bg-primary-hover rounded-lg transition"
+        className="px-4 py-2 text-sm font-medium text-text-secondary hover:bg-sidebar-hover border border-card-border rounded-lg transition"
       >
         Invite Members
       </button>

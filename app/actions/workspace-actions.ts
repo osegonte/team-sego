@@ -1,14 +1,16 @@
 'use server'
 
-import { createClient as createServerClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import type { ActionResult } from '@/lib/types/actions'
+import type { WorkspaceType } from '@/lib/types/workspace'
 
 export async function createWorkspace(
   name: string,
   description: string | null,
-  workspaceType: 'personal' | 'team' | 'class'
-) {
+  workspaceType: WorkspaceType
+): Promise<ActionResult<{ workspaceId: string; workspaceName: string }>> {
   const supabase = await createClient()
   const { data: { user }, error: userError } = await supabase.auth.getUser()
   
@@ -16,16 +18,7 @@ export async function createWorkspace(
     return { error: 'Not authenticated' }
   }
 
-  const supabaseAdmin = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  )
+  const supabaseAdmin = getAdminClient()
 
   const { data: workspace, error: workspaceError } = await supabaseAdmin
     .from('workspaces')
@@ -39,7 +32,7 @@ export async function createWorkspace(
     .single()
 
   if (workspaceError) {
-    console.error('Failed to create workspace:', workspaceError)
+    console.error('[createWorkspace]', workspaceError)
     return { error: 'Failed to create workspace' }
   }
 
@@ -53,7 +46,7 @@ export async function createWorkspace(
     })
 
   if (memberError) {
-    console.error('Failed to create membership:', memberError)
+    console.error('[createWorkspace] Membership creation failed:', memberError)
     await supabaseAdmin.from('workspaces').delete().eq('id', workspace.id)
     return { error: 'Failed to create workspace membership' }
   }
@@ -63,12 +56,14 @@ export async function createWorkspace(
   
   return { 
     success: true, 
-    workspaceId: workspace.id,
-    workspaceName: workspace.name
+    data: {
+      workspaceId: workspace.id,
+      workspaceName: workspace.name
+    }
   }
 }
 
-export async function deleteWorkspace(workspaceId: string) {
+export async function deleteWorkspace(workspaceId: string): Promise<ActionResult<{ workspaceName: string }>> {
   const supabase = await createClient()
   const { data: { user }, error: userError } = await supabase.auth.getUser()
   
@@ -76,18 +71,8 @@ export async function deleteWorkspace(workspaceId: string) {
     return { error: 'Not authenticated' }
   }
 
-  const supabaseAdmin = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  )
+  const supabaseAdmin = getAdminClient()
 
-  // Verify user is the owner
   const { data: workspace } = await supabaseAdmin
     .from('workspaces')
     .select('owner_id, name')
@@ -102,17 +87,16 @@ export async function deleteWorkspace(workspaceId: string) {
     return { error: 'Only the workspace owner can delete it' }
   }
 
-  // Delete workspace (CASCADE will delete members and invites)
   const { error } = await supabaseAdmin
     .from('workspaces')
     .delete()
     .eq('id', workspaceId)
 
   if (error) {
-    console.error('Failed to delete workspace:', error)
+    console.error('[deleteWorkspace]', error)
     return { error: 'Failed to delete workspace' }
   }
 
   revalidatePath('/dashboard')
-  return { success: true, workspaceName: workspace.name }
+  return { success: true, data: { workspaceName: workspace.name } }
 }

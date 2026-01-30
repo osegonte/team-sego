@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createWorkspace } from '@/app/actions/workspace-actions'
+import type { WorkspaceType } from '@/lib/types/workspace'
 
 interface CreateWorkspaceModalProps {
   isOpen: boolean
@@ -14,7 +15,7 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
   
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [workspaceType, setWorkspaceType] = useState<'personal' | 'team' | 'class'>('team')
+  const [workspaceType, setWorkspaceType] = useState<WorkspaceType>('team')
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,30 +24,23 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
     setError(null)
     setIsCreating(true)
 
-    try {
-      const result = await createWorkspace(
-        name,
-        description || null,
-        workspaceType
-      )
-      
-      if (result.error) {
-        setError(result.error)
-        setIsCreating(false)
-      } else if (result.workspaceId) {
-        // Reset form
-        setName('')
-        setDescription('')
-        setWorkspaceType('team')
-        
-        // Close modal and navigate
-        onClose()
-        router.push(`/workspace/${result.workspaceId}`)
-        router.refresh()
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to create workspace')
+    const result = await createWorkspace(
+      name,
+      description || null,
+      workspaceType
+    )
+    
+    if ('error' in result) {
+      setError(result.error)
       setIsCreating(false)
+    } else if (result.data) {
+      setName('')
+      setDescription('')
+      setWorkspaceType('team')
+      
+      onClose()
+      router.push(`/workspace/${result.data.workspaceId}`)
+      router.refresh()
     }
   }
 
@@ -55,7 +49,6 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-card-bg rounded-xl shadow-dropdown max-w-md w-full">
-        {/* Modal Header */}
         <div className="px-6 py-4 border-b border-card-border">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-text-primary">Create Workspace</h2>
@@ -71,7 +64,6 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
           </div>
         </div>
 
-        {/* Modal Body */}
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           {error && (
             <div className="bg-danger-light border border-danger text-danger px-4 py-3 rounded-lg text-sm">
@@ -79,7 +71,6 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
             </div>
           )}
 
-          {/* Workspace Name */}
           <div>
             <label className="block text-sm font-medium text-text-primary mb-2">
               Workspace Name *
@@ -95,7 +86,6 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
             />
           </div>
 
-          {/* Workspace Type */}
           <div>
             <label className="block text-sm font-medium text-text-primary mb-2">
               Workspace Type
@@ -122,7 +112,6 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
             </div>
           </div>
 
-          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-text-primary mb-2">
               Description (Optional)
@@ -138,7 +127,6 @@ export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalPr
           </div>
         </form>
 
-        {/* Modal Footer */}
         <div className="px-6 py-4 bg-sidebar-bg rounded-b-xl flex justify-end gap-3">
           <button
             type="button"

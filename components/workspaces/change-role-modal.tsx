@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { changeMemberRole } from '@/app/actions/member-actions'
+import { WORKSPACE_ROLES, type WorkspaceRole } from '@/lib/types/workspace'
 
 interface ChangeRoleModalProps {
   isOpen: boolean
@@ -11,13 +12,6 @@ interface ChangeRoleModalProps {
   memberName: string
   currentRole: string
 }
-
-const ROLES = [
-  { value: 'owner', label: 'Owner', description: 'Full access including workspace deletion' },
-  { value: 'admin', label: 'Admin', description: 'Can manage members and settings' },
-  { value: 'editor', label: 'Editor', description: 'Can create and edit content' },
-  { value: 'viewer', label: 'Viewer', description: 'Can only view content' },
-] as const
 
 export function ChangeRoleModal({
   isOpen,
@@ -42,18 +36,13 @@ export function ChangeRoleModal({
     setError(null)
     setIsChanging(true)
 
-    try {
-      const result = await changeMemberRole(workspaceId, membershipId, selectedRole as any)
-      
-      if (result.error) {
-        setError(result.error)
-        setIsChanging(false)
-      } else {
-        onClose()
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to change role')
+    const result = await changeMemberRole(workspaceId, membershipId, selectedRole as WorkspaceRole)
+    
+    if ('error' in result) {
+      setError(result.error)
       setIsChanging(false)
+    } else {
+      onClose()
     }
   }
 
@@ -62,7 +51,6 @@ export function ChangeRoleModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-card-bg rounded-xl shadow-dropdown max-w-md w-full">
-        {/* Modal Header */}
         <div className="px-6 py-4 border-b border-card-border">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-text-primary">Change Role</h2>
@@ -81,7 +69,6 @@ export function ChangeRoleModal({
           </p>
         </div>
 
-        {/* Modal Body */}
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           {error && (
             <div className="bg-danger-light border border-danger text-danger px-4 py-3 rounded-lg text-sm">
@@ -89,14 +76,13 @@ export function ChangeRoleModal({
             </div>
           )}
 
-          {/* Role Options */}
           <div className="space-y-2">
-            {ROLES.map((role) => (
+            {(Object.entries(WORKSPACE_ROLES) as [WorkspaceRole, typeof WORKSPACE_ROLES[WorkspaceRole]][]).map(([roleValue, roleData]) => (
               <label
-                key={role.value}
+                key={roleValue}
                 className={`
                   flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition
-                  ${selectedRole === role.value
+                  ${selectedRole === roleValue
                     ? 'border-primary bg-primary-light'
                     : 'border-card-border hover:border-card-border-hover'
                   }
@@ -105,21 +91,21 @@ export function ChangeRoleModal({
                 <input
                   type="radio"
                   name="role"
-                  value={role.value}
-                  checked={selectedRole === role.value}
+                  value={roleValue}
+                  checked={selectedRole === roleValue}
                   onChange={(e) => setSelectedRole(e.target.value)}
                   className="mt-1"
                   disabled={isChanging}
                 />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-text-primary">{role.label}</span>
-                    {role.value === currentRole && (
+                    <span className="font-medium text-text-primary">{roleData.label}</span>
+                    {roleValue === currentRole && (
                       <span className="text-xs text-text-tertiary">(current)</span>
                     )}
                   </div>
                   <p className="text-xs text-text-secondary mt-0.5">
-                    {role.description}
+                    {roleData.description}
                   </p>
                 </div>
               </label>
@@ -127,7 +113,6 @@ export function ChangeRoleModal({
           </div>
         </form>
 
-        {/* Modal Footer */}
         <div className="px-6 py-4 bg-sidebar-bg rounded-b-xl flex justify-end gap-3">
           <button
             type="button"

@@ -25,18 +25,13 @@ export function RemoveMemberModal({
     setError(null)
     setIsRemoving(true)
 
-    try {
-      const result = await removeMember(workspaceId, membershipId)
-      
-      if (result.error) {
-        setError(result.error)
-        setIsRemoving(false)
-      } else {
-        onClose()
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to remove member')
+    const result = await removeMember(workspaceId, membershipId)
+    
+    if ('error' in result) {
+      setError(result.error)
       setIsRemoving(false)
+    } else {
+      onClose()
     }
   }
 
@@ -45,7 +40,6 @@ export function RemoveMemberModal({
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-card-bg rounded-xl shadow-dropdown max-w-md w-full">
-        {/* Modal Header */}
         <div className="px-6 py-4 border-b border-card-border">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-text-primary">Remove Member</h2>
@@ -61,7 +55,6 @@ export function RemoveMemberModal({
           </div>
         </div>
 
-        {/* Modal Body */}
         <div className="px-6 py-4 space-y-4">
           {error && (
             <div className="bg-danger-light border border-danger text-danger px-4 py-3 rounded-lg text-sm">
@@ -86,7 +79,6 @@ export function RemoveMemberModal({
           </div>
         </div>
 
-        {/* Modal Footer */}
         <div className="px-6 py-4 bg-sidebar-bg rounded-b-xl flex justify-end gap-3">
           <button
             type="button"
