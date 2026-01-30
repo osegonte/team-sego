@@ -19,12 +19,16 @@ export default async function InvitePage({
     redirect(`/login?redirect=/invite/${token}`)
   }
 
+  // Fetch invite with workspace info
   const { data: invite, error } = await supabase
     .from('invites')
     .select(`
       *,
-      workspaces(name, description, workspace_type),
-      profiles:created_by(display_name, username)
+      workspaces (
+        name,
+        description,
+        workspace_type
+      )
     `)
     .eq('token', token)
     .single()
@@ -53,6 +57,15 @@ export default async function InvitePage({
     )
   }
 
+  // Fetch inviter profile separately
+  const { data: inviterProfile } = await supabase
+    .from('profiles')
+    .select('display_name, username')
+    .eq('id', invite.created_by)
+    .single()
+
+  const inviterName = inviterProfile?.display_name || inviterProfile?.username || 'Someone'
+
   const isExpired = new Date(invite.expires_at) < new Date()
   const isAccepted = !!invite.accepted_by
 
@@ -73,7 +86,7 @@ export default async function InvitePage({
       workspaceDescription={invite.workspaces?.description}
       workspaceType={invite.workspaces?.workspace_type}
       role={invite.role_to_grant}
-      inviterName={invite.profiles?.display_name || invite.profiles?.username || 'Someone'}
+      inviterName={inviterName}
       isExpired={isExpired}
       isAccepted={isAccepted}
       isAlreadyMember={isAlreadyMember}

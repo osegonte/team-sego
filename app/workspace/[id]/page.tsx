@@ -1,15 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { AppLayout } from '@/components/layout/app-layout'
 import { MemberRow } from '@/components/workspaces/member-row'
 import { InviteButton } from '@/components/workspaces/invite-button'
+import { DeleteWorkspaceButton } from '@/components/workspaces/delete-workspace-button'
 
 export default async function WorkspacePage({ 
   params 
 }: { 
   params: Promise<{ id: string }> 
 }) {
-  // Await params in Next.js 16+
   const { id } = await params
   
   const supabase = await createClient()
@@ -22,8 +23,20 @@ export default async function WorkspacePage({
     redirect('/login')
   }
 
+  // Use service role to avoid RLS recursion
+  const supabaseAdmin = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  )
+
   // Fetch workspace
-  const { data: workspace, error: workspaceError } = await supabase
+  const { data: workspace, error: workspaceError } = await supabaseAdmin
     .from('workspaces')
     .select('*')
     .eq('id', id)
@@ -34,7 +47,7 @@ export default async function WorkspacePage({
   }
 
   // Check if user is a member
-  const { data: membership } = await supabase
+  const { data: membership } = await supabaseAdmin
     .from('workspace_members')
     .select('role, status')
     .eq('workspace_id', id)
@@ -43,12 +56,11 @@ export default async function WorkspacePage({
     .single()
 
   if (!membership) {
-    // Not a member - redirect
     redirect('/dashboard')
   }
 
   // Fetch all members
-  const { data: members } = await supabase
+  const { data: members } = await supabaseAdmin
     .from('workspace_members')
     .select(`
       id,
@@ -66,7 +78,7 @@ export default async function WorkspacePage({
     .eq('status', 'active')
 
   // Fetch all user's workspaces for sidebar
-  const { data: allMemberships } = await supabase
+  const { data: allMemberships } = await supabaseAdmin
     .from('workspace_members')
     .select('workspace_id, role, status')
     .eq('user_id', user.id)
@@ -74,7 +86,7 @@ export default async function WorkspacePage({
 
   const workspaceIds = allMemberships?.map(m => m.workspace_id) || []
   
-  const { data: workspacesList } = await supabase
+  const { data: workspacesList } = await supabaseAdmin
     .from('workspaces')
     .select('*')
     .in('id', workspaceIds)
@@ -109,11 +121,12 @@ export default async function WorkspacePage({
               )}
             </div>
 
-            {/* Settings Button (Owner Only) */}
+            {/* Delete Button (Owner Only) */}
             {isOwner && (
-              <button className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-sidebar-hover rounded-lg transition">
-                Settings
-              </button>
+              <DeleteWorkspaceButton 
+                workspaceId={id} 
+                workspaceName={workspace.name}
+              />
             )}
           </div>
 

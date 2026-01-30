@@ -1,8 +1,24 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { randomBytes } from 'crypto'
+import { sendInviteEmail } from '@/lib/email'
+
+// Service role client for privileged operations (bypasses RLS)
+function getServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  )
+}
 
 export async function createInvite(
   workspaceId: string,
@@ -10,6 +26,7 @@ export async function createInvite(
   role: 'owner' | 'admin' | 'editor' | 'viewer'
 ) {
   const supabase = await createClient()
+  const supabaseAdmin = getServiceClient()
   
   const {
     data: { user },
@@ -35,14 +52,12 @@ export async function createInvite(
   // Check if a user with this email exists and is already a member
   const normalizedEmail = email.toLowerCase().trim()
   
-  // First, get the user ID for this email (if they exist)
   const { data: existingProfile } = await supabase
     .from('profiles')
     .select('id')
     .eq('email', normalizedEmail)
     .single()
 
-  // If user exists, check if they're already a member
   if (existingProfile) {
     const { data: existingMembership } = await supabase
       .from('workspace_members')
@@ -80,7 +95,8 @@ export async function createInvite(
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + 7)
 
-  const { data: invite, error } = await supabase
+  // Use service role to bypass RLS
+  const { data: invite, error } = await supabaseAdmin
     .from('invites')
     .insert({
       workspace_id: workspaceId,
@@ -94,25 +110,61 @@ export async function createInvite(
     .single()
 
   if (error) {
+    console.error('Failed to create invite:', error)
     return { error: error.message }
   }
 
-  // Generate invite URL (this is for backup/email purposes)
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const inviteUrl = `${baseUrl}/invite/${token}`
 
+  // Get inviter name for email
+  const { data: inviterProfile } = await supabase
+    .from('profiles')
+    .select('display_name, username')
+    .eq('id', user.id)
+    .single()
+
+  const inviterName = inviterProfile?.display_name || inviterProfile?.username || user.email?.split('@')[0] || 'Someone'
+
+  // Get workspace name for email
+  const { data: workspace } = await supabaseAdmin
+    .from('workspaces')
+    .select('name')
+    .eq('id', workspaceId)
+    .single()
+
+  // Send email invitation
+  const emailResult = await sendInviteEmail({
+    to: normalizedEmail,
+    inviterName,
+    workspaceName: workspace?.name || 'a workspace',
+    role,
+    inviteUrl,
+    expiresAt: expiresAt.toISOString(),
+  })
+
+  if (emailResult.error) {
+    console.error('⚠️ Failed to send invite email:', emailResult.error)
+    // Don't fail the whole invite if email fails - user can still see in-app notification
+  } else {
+    console.log('✅ Invite email sent successfully to:', normalizedEmail)
+  }
+
   revalidatePath(`/workspace/${workspaceId}`)
   revalidatePath('/dashboard')
+  revalidatePath('/notifications')
   
   return { 
     success: true, 
     inviteUrl,
-    token 
+    token,
+    emailSent: !emailResult.error 
   }
 }
 
 export async function acceptInvite(token: string) {
   const supabase = await createClient()
+  const supabaseAdmin = getServiceClient()
   
   const {
     data: { user },
@@ -122,7 +174,7 @@ export async function acceptInvite(token: string) {
     return { error: 'Not authenticated', requiresLogin: true }
   }
 
-  // Get invite
+  // Get invite (use regular client for SELECT - RLS allows this)
   const { data: invite, error: inviteError } = await supabase
     .from('invites')
     .select('*, workspaces(name)')
@@ -143,6 +195,12 @@ export async function acceptInvite(token: string) {
     return { error: 'This invite has expired' }
   }
 
+  // Verify invite is for this user's email
+  const userEmail = user.email?.toLowerCase()
+  if (invite.invited_email !== userEmail) {
+    return { error: 'This invite is not for your email address' }
+  }
+
   // Check if user is already a member
   const { data: existingMember } = await supabase
     .from('workspace_members')
@@ -159,8 +217,8 @@ export async function acceptInvite(token: string) {
     }
   }
 
-  // Create membership
-  const { error: memberError } = await supabase
+  // Create membership using service role (bypasses RLS)
+  const { error: memberError } = await supabaseAdmin
     .from('workspace_members')
     .insert({
       workspace_id: invite.workspace_id,
@@ -170,11 +228,12 @@ export async function acceptInvite(token: string) {
     })
 
   if (memberError) {
-    return { error: memberError.message }
+    console.error('Failed to create membership:', memberError)
+    return { error: 'Failed to accept invite. Please try again.' }
   }
 
-  // Mark invite as accepted
-  const { error: updateError } = await supabase
+  // Mark invite as accepted using service role
+  const { error: updateError } = await supabaseAdmin
     .from('invites')
     .update({
       accepted_by: user.id,
@@ -187,6 +246,7 @@ export async function acceptInvite(token: string) {
   }
 
   revalidatePath('/dashboard')
+  revalidatePath('/notifications')
   revalidatePath(`/workspace/${invite.workspace_id}`)
 
   return { 
@@ -224,17 +284,19 @@ export async function declineInvite(inviteId: string) {
     return { error: 'This invite is not for your email address' }
   }
 
-  // Delete the invite (declining = removing it)
+  // Delete the invite (RLS allows this)
   const { error: deleteError } = await supabase
     .from('invites')
     .delete()
     .eq('id', inviteId)
 
   if (deleteError) {
+    console.error('Failed to decline invite:', deleteError)
     return { error: 'Failed to decline invite' }
   }
 
   revalidatePath('/dashboard')
+  revalidatePath('/notifications')
 
   return { success: true }
 }

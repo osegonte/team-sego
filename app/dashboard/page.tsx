@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import { AppLayout } from '@/components/layout/app-layout'
 import { PendingInvitesBanner } from '@/components/invites/pending-invites-banner'
@@ -21,8 +22,20 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  // Fetch user's workspaces
-  const { data: memberships } = await supabase
+  // Use service role to fetch workspaces (avoids RLS recursion)
+  const supabaseAdmin = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  )
+
+  // Fetch user's workspace memberships
+  const { data: memberships } = await supabaseAdmin
     .from('workspace_members')
     .select('workspace_id, role, status')
     .eq('user_id', user.id)
@@ -30,7 +43,7 @@ export default async function DashboardPage() {
 
   const workspaceIds = memberships?.map(m => m.workspace_id) || []
   
-  const { data: workspacesList } = await supabase
+  const { data: workspacesList } = await supabaseAdmin
     .from('workspaces')
     .select('*')
     .in('id', workspaceIds)

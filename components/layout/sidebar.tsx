@@ -12,20 +12,13 @@ interface SidebarProps {
 export function Sidebar({ workspaces, currentWorkspaceId }: SidebarProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
 
-  // Find current workspace or default to first one
-  const currentWorkspace = workspaces.find(w => w.workspaces.id === currentWorkspaceId) || workspaces[0]
-  const currentWorkspaceName = currentWorkspace?.workspaces.name || 'Team Sego'
-
-  // Filter out current workspace from the list
-  const otherWorkspaces = workspaces.filter(w => w.workspaces.id !== currentWorkspace?.workspaces.id)
-
   return (
     <>
       <aside className="w-64 bg-sidebar-bg border-r border-sidebar-border flex flex-col">
-        {/* Sidebar Header - Current Workspace + Plus Button */}
+        {/* Sidebar Header */}
         <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border">
-          <h1 className="text-lg font-semibold text-text-primary truncate">
-            {currentWorkspaceName}
+          <h1 className="text-lg font-semibold text-text-primary">
+            Team Sego
           </h1>
           
           {/* Create Workspace Button */}
@@ -42,7 +35,7 @@ export function Sidebar({ workspaces, currentWorkspaceId }: SidebarProps) {
 
         {/* Workspaces List */}
         <div className="flex-1 overflow-y-auto py-4">
-          {otherWorkspaces.length > 0 && (
+          {workspaces.length > 0 ? (
             <>
               <div className="px-3 mb-2">
                 <h2 className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
@@ -51,30 +44,47 @@ export function Sidebar({ workspaces, currentWorkspaceId }: SidebarProps) {
               </div>
 
               <nav className="space-y-1 px-2">
-                {otherWorkspaces.map((workspace) => (
-                  <Link
-                    key={workspace.workspaces.id}
-                    href={`/workspace/${workspace.workspaces.id}`}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-text-primary hover:bg-sidebar-hover transition"
-                  >
-                    {/* Workspace Icon */}
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold bg-gray-100 text-text-secondary">
-                      {workspace.workspaces.name.substring(0, 2).toUpperCase()}
-                    </div>
-                    
-                    {/* Workspace Name */}
-                    <div className="flex-1 min-w-0 truncate">
-                      {workspace.workspaces.name}
-                    </div>
+                {workspaces.map((workspace) => {
+                  const isActive = workspace.workspaces.id === currentWorkspaceId
+                  
+                  return (
+                    <Link
+                      key={workspace.workspaces.id}
+                      href={`/workspace/${workspace.workspaces.id}`}
+                      className={`
+                        flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition
+                        ${isActive 
+                          ? 'bg-primary-light text-primary border border-primary' 
+                          : 'text-text-primary hover:bg-sidebar-hover'
+                        }
+                      `}
+                    >
+                      {/* Workspace Icon */}
+                      <div className={`
+                        w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold
+                        ${isActive ? 'bg-primary text-text-inverse' : 'bg-gray-100 text-text-secondary'}
+                      `}>
+                        {workspace.workspaces.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      
+                      {/* Workspace Name */}
+                      <div className="flex-1 min-w-0 truncate">
+                        {workspace.workspaces.name}
+                      </div>
 
-                    {/* Role Badge (owner only) */}
-                    {workspace.role === 'owner' && (
-                      <span className="text-xs text-text-tertiary">★</span>
-                    )}
-                  </Link>
-                ))}
+                      {/* Role Badge */}
+                      {workspace.role === 'owner' && (
+                        <span className="text-xs text-text-tertiary">★</span>
+                      )}
+                    </Link>
+                  )
+                })}
               </nav>
             </>
+          ) : (
+            <div className="px-4 py-8 text-center text-sm text-text-tertiary">
+              No workspaces yet. Create one to get started!
+            </div>
           )}
         </div>
       </aside>
