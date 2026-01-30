@@ -174,16 +174,26 @@ export async function acceptInvite(token: string) {
     return { error: 'Not authenticated', requiresLogin: true }
   }
 
-  // Get invite (use regular client for SELECT - RLS allows this)
-  const { data: invite, error: inviteError } = await supabase
+  console.log('🔍 Accepting invite:', { token, userId: user.id, userEmail: user.email })
+
+  // Get invite using SERVICE ROLE (bypasses RLS - critical for new users!)
+  const { data: invite, error: inviteError } = await supabaseAdmin
     .from('invites')
     .select('*, workspaces(name)')
     .eq('token', token)
     .single()
 
   if (inviteError || !invite) {
+    console.error('❌ Failed to fetch invite:', inviteError)
     return { error: 'Invite not found or invalid' }
   }
+
+  console.log('✅ Invite found:', {
+    inviteId: invite.id,
+    workspaceName: invite.workspaces?.name,
+    invitedEmail: invite.invited_email,
+    acceptedBy: invite.accepted_by
+  })
 
   // Check if already accepted
   if (invite.accepted_by) {
@@ -201,8 +211,8 @@ export async function acceptInvite(token: string) {
     return { error: 'This invite is not for your email address' }
   }
 
-  // Check if user is already a member
-  const { data: existingMember } = await supabase
+  // Check if user is already a member using service role
+  const { data: existingMember } = await supabaseAdmin
     .from('workspace_members')
     .select('id')
     .eq('workspace_id', invite.workspace_id)
@@ -217,6 +227,8 @@ export async function acceptInvite(token: string) {
     }
   }
 
+  console.log('🔨 Creating workspace membership...')
+
   // Create membership using service role (bypasses RLS)
   const { error: memberError } = await supabaseAdmin
     .from('workspace_members')
@@ -228,9 +240,11 @@ export async function acceptInvite(token: string) {
     })
 
   if (memberError) {
-    console.error('Failed to create membership:', memberError)
+    console.error('❌ Failed to create membership:', memberError)
     return { error: 'Failed to accept invite. Please try again.' }
   }
+
+  console.log('✅ Workspace membership created successfully')
 
   // Mark invite as accepted using service role
   const { error: updateError } = await supabaseAdmin
@@ -242,7 +256,9 @@ export async function acceptInvite(token: string) {
     .eq('token', token)
 
   if (updateError) {
-    console.error('Error updating invite:', updateError)
+    console.error('⚠️ Error updating invite (non-critical):', updateError)
+  } else {
+    console.log('✅ Invite marked as accepted')
   }
 
   revalidatePath('/dashboard')

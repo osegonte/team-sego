@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { acceptInvite, declineInvite } from '@/app/actions/invite-actions'
 
 interface AcceptInviteClientProps {
+  inviteId: string
   token: string
   workspaceName: string
   workspaceDescription?: string | null
@@ -25,6 +26,7 @@ const roleDescriptions = {
 }
 
 export function AcceptInviteClient({
+  inviteId,
   token,
   workspaceName,
   workspaceDescription,
@@ -116,11 +118,15 @@ export function AcceptInviteClient({
     setIsLoading(true)
     setError(null)
     
+    console.log('🔘 User clicked Accept button')
     const result = await acceptInvite(token)
     
     if (result.success) {
+      console.log('✅ Invite accepted successfully, redirecting to workspace...')
       router.push(`/workspace/${workspaceId}`)
+      router.refresh()
     } else {
+      console.error('❌ Failed to accept invite:', result.error)
       setError(result.error || 'Failed to accept invite')
       setIsLoading(false)
     }
@@ -130,11 +136,15 @@ export function AcceptInviteClient({
     setIsLoading(true)
     setError(null)
     
-    const result = await declineInvite(token)
+    console.log('🔘 User clicked Decline button')
+    const result = await declineInvite(inviteId)
     
     if (result.success) {
+      console.log('✅ Invite declined successfully, redirecting to dashboard...')
       router.push('/dashboard')
+      router.refresh()
     } else {
+      console.error('❌ Failed to decline invite:', result.error)
       setError(result.error || 'Failed to decline invite')
       setIsLoading(false)
     }
