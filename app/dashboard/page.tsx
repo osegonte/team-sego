@@ -54,25 +54,35 @@ export default async function DashboardPage() {
       role_to_grant,
       workspace_id,
       created_at,
-      workspaces(name, workspace_type),
-      profiles:created_by(display_name, username)
+      created_by,
+      workspaces(name, workspace_type)
     `)
     .eq('invited_email', userEmail)
     .is('accepted_by', null)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
 
+  // Fetch inviter profiles separately to avoid relationship errors
+  const inviterIds = pendingInvites?.map(inv => inv.created_by).filter(Boolean) || []
+  const { data: inviterProfiles } = await supabase
+    .from('profiles')
+    .select('id, display_name, username')
+    .in('id', inviterIds)
+
   // Format invites for the banner
-  const formattedInvites = pendingInvites?.map(invite => ({
-    id: invite.id,
-    token: invite.token,
-    role_to_grant: invite.role_to_grant,
-    workspace_id: invite.workspace_id,
-    workspace_name: invite.workspaces?.name || 'Unknown Workspace',
-    workspace_type: invite.workspaces?.workspace_type || 'team',
-    inviter_name: invite.profiles?.display_name || invite.profiles?.username || 'Someone',
-    created_at: invite.created_at
-  })) || []
+  const formattedInvites = pendingInvites?.map(invite => {
+    const inviterProfile = inviterProfiles?.find(p => p.id === invite.created_by)
+    return {
+      id: invite.id,
+      token: invite.token,
+      role_to_grant: invite.role_to_grant,
+      workspace_id: invite.workspace_id,
+      workspace_name: invite.workspaces?.name || 'Unknown Workspace',
+      workspace_type: invite.workspaces?.workspace_type || 'team',
+      inviter_name: inviterProfile?.display_name || inviterProfile?.username || 'Someone',
+      created_at: invite.created_at
+    }
+  }) || []
 
   // Get display name
   const displayName = profile?.display_name || user.email?.split('@')[0] || 'there'
